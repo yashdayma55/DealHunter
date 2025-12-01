@@ -1,65 +1,291 @@
-import Image from "next/image";
+// app/page.tsx
+"use client";
 
-export default function Home() {
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/src/lib/supabaseClient";
+import type { Deal } from "@/src/types/deal";
+import { DealCard } from "@/components/DealCard";
+import { DealSkeleton } from "@/components/DealSkeleton";
+import { Search, Filter } from "lucide-react";
+
+type SortOption = "newest" | "hottest" | "biggest-discount";
+type QuickFilter = "all" | "hot" | "free" | "expiring";
+
+export default function HomePage() {
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [minScore, setMinScore] = useState(0);
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+
+  // ─────────────────────────────────────────────────────────────
+  // Fetch deals from Supabase
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    async function loadDeals() {
+      setLoading(true);
+      setError(null);
+
+      const { data, error } = await supabase
+        .from("deals")
+        .select(
+          "id,title,description,price_before,price_after,currency,discount_type,discount_value,url,referral_code,score_at_scrape,posted_utc,expiry_date"
+        )
+        .order("posted_utc", { ascending: false })
+        .limit(120);
+
+      if (error) {
+        console.error("Error loading deals:", error);
+        setError(error.message ?? "Unknown error");
+      } else if (data) {
+        setDeals(data as Deal[]);
+      }
+
+      setLoading(false);
+    }
+
+    loadDeals();
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────
+  // Derived stats for header chips
+  // ─────────────────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const total = deals.length;
+    const hot = deals.filter((d) => (d.score_at_scrape ?? 0) >= 50).length;
+    const free = deals.filter((d) => d.price_after === 0).length;
+
+    const latest = deals[0]?.posted_utc
+      ? new Date(deals[0].posted_utc as any)
+      : null;
+
+    return { total, hot, free, latest };
+  }, [deals]);
+
+  // ─────────────────────────────────────────────────────────────
+  // Filtering & sorting
+  // ─────────────────────────────────────────────────────────────
+  const filteredDeals = useMemo(() => {
+    let result = [...deals];
+
+    // Search by title
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((d) => d.title.toLowerCase().includes(q));
+    }
+
+    // Min score slider
+    if (minScore > 0) {
+      result = result.filter(
+        (d) => (d.score_at_scrape ?? 0) >= minScore
+      );
+    }
+
+    // Quick filter chips
+    if (quickFilter === "hot") {
+      result = result.filter((d) => (d.score_at_scrape ?? 0) >= 50);
+    } else if (quickFilter === "free") {
+      result = result.filter((d) => d.price_after === 0);
+    } else if (quickFilter === "expiring") {
+      const now = new Date();
+      const twoDays = 1000 * 60 * 60 * 24 * 2;
+      result = result.filter((d) => {
+        if (!d.expiry_date) return false;
+        const exp = new Date(d.expiry_date as any).getTime();
+        return exp - now.getTime() <= twoDays && exp >= now.getTime();
+      });
+    }
+
+    // Sorting
+    if (sortBy === "hottest") {
+      result.sort(
+        (a, b) => (b.score_at_scrape ?? 0) - (a.score_at_scrape ?? 0)
+      );
+    } else if (sortBy === "biggest-discount") {
+      result.sort((a, b) => {
+        const getPct = (d: Deal) => {
+          if (!d.price_before || !d.price_after) return 0;
+          const diff = d.price_before - d.price_after;
+          if (diff <= 0) return 0;
+          return diff / d.price_before;
+        };
+        return getPct(b) - getPct(a);
+      });
+    }
+    // "newest" is default order from query
+
+    return result;
+  }, [deals, search, minScore, sortBy, quickFilter]);
+
+  // Helper for quick-filter chip styling
+  const chipClasses = (active: boolean) =>
+    `rounded-full border px-3 py-1 text-xs transition-colors ${
+      active
+        ? "border-pink-500 bg-pink-500/10 text-pink-200"
+        : "border-zinc-700 bg-zinc-900/60 text-zinc-400 hover:border-pink-500/60 hover:text-pink-200"
+    }`;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <main className="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900 to-black text-zinc-50">
+      {/* Soft glow background */}
+      <div className="pointer-events-none fixed inset-0 -z-10 opacity-70">
+        <div className="absolute -left-10 top-20 h-64 w-64 rounded-full bg-pink-500/20 blur-3xl" />
+        <div className="absolute right-0 top-40 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
+      </div>
+
+      <div className="mx-auto max-w-6xl px-4 py-8 md:py-12">
+        {/* Header */}
+        <header className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-orange-400 via-pink-400 to-yellow-300 bg-clip-text text-transparent">
+              Latest Deals
+            </h1>
+            <p className="mt-3 text-sm text-zinc-400 max-w-xl">
+              Fresh app & game deals scraped from Reddit in real time. Filter by
+              heat, search by name, and jump straight to the store in one click.
+            </p>
+
+            {/* Quick filter chips */}
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              <button
+                onClick={() => setQuickFilter("all")}
+                className={chipClasses(quickFilter === "all")}
+              >
+                All deals ({stats.total})
+              </button>
+              <button
+                onClick={() => setQuickFilter("hot")}
+                className={chipClasses(quickFilter === "hot")}
+              >
+                🔥 Hot (50+)
+              </button>
+              <button
+                onClick={() => setQuickFilter("free")}
+                className={chipClasses(quickFilter === "free")}
+              >
+                🆓 Free / 0$
+              </button>
+              <button
+                onClick={() => setQuickFilter("expiring")}
+                className={chipClasses(quickFilter === "expiring")}
+              >
+                ⏰ Expiring soon
+              </button>
+            </div>
+          </div>
+
+          {/* Right side: live badge + stats */}
+          <div className="flex flex-col items-end gap-3 text-xs">
+            <span className="inline-flex items-center rounded-full bg-zinc-900/80 px-3 py-1 text-zinc-400 border border-zinc-700/80">
+              <span className="mr-1 h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+              Live data from Supabase
+            </span>
+            <div className="flex flex-col items-end text-zinc-500">
+              <span>Total deals: {stats.total}</span>
+              <span>Hot (50+): {stats.hot}</span>
+              <span>Free: {stats.free}</span>
+              {stats.latest && (
+                <span>
+                  Last update:{" "}
+                  {stats.latest.toLocaleString(undefined, {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Controls: search + dropdowns */}
+        <section className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {/* Search */}
+          <div className="relative w-full md:max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Search deals (e.g. VPN, photo editor, game)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-full border border-zinc-700 bg-zinc-900/80 pl-9 pr-4 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3 text-xs z-50 relative">
+            {/* Min heat */}
+            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/80 px-3 py-1 relative z-50">
+              <Filter className="h-3 w-3 text-zinc-500" />
+              <span className="text-zinc-400">Min heat</span>
+              <select
+                value={minScore}
+                onChange={(e) => setMinScore(Number(e.target.value))}
+                className="bg-zinc-800 text-zinc-100 rounded px-2 py-1 z-50 relative outline-none"
+                style={{ position: "relative" }}
+              >
+                <option value={0}>Any</option>
+                <option value={25}>25+</option>
+                <option value={50}>50+</option>
+                <option value={100}>100+</option>
+              </select>
+            </div>
+
+            {/* Sort by */}
+            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/80 px-3 py-1 relative z-50">
+              <span className="text-zinc-400">Sort by</span>
+              <select
+                value={sortBy}
+                onChange={(e) =>
+                  setSortBy(e.target.value as SortOption)
+                }
+                className="bg-zinc-800 text-zinc-100 rounded px-2 py-1 z-50 relative outline-none"
+                style={{ position: "relative" }}
+              >
+                <option value="newest">Newest</option>
+                <option value="hottest">Hottest</option>
+                <option value="biggest-discount">Biggest discount</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* Content */}
+        {loading ? (
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <DealSkeleton key={i} />
+            ))}
+          </section>
+        ) : error ? (
+          <div className="mt-10 rounded-2xl border border-red-500/40 bg-red-500/5 p-6 text-sm text-red-200">
+            <p className="font-semibold mb-1">Failed to load deals</p>
+            <p className="text-red-300">{error}</p>
+          </div>
+        ) : filteredDeals.length === 0 ? (
+          <div className="mt-10 flex flex-col items-center justify-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-900/70 px-6 py-10 text-center text-sm text-zinc-300">
+            <p className="text-lg font-semibold">
+              No deals match your filters 🔍
+            </p>
+            <p className="text-zinc-400 max-w-md">
+              Try clearing the search box, lowering the minimum heat, or
+              switching the quick filters back to{" "}
+              <span className="font-medium text-pink-300">All deals</span>.
+            </p>
+          </div>
+        ) : (
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredDeals.map((deal) => (
+              <DealCard key={deal.id} deal={deal} />
+            ))}
+          </section>
+        )}
+      </div>
+    </main>
   );
 }
