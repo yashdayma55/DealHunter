@@ -5,7 +5,16 @@ import { importRedditDeals } from "../scrapers/reddit/redditToSupabase.js";
 
 import "dotenv/config";
 
-const SUBREDDITS = ["googleplaydeals", "androidapps", "AppHookup"]; // you can tweak this
+const SUBREDDITS = [
+  "googleplaydeals",
+  "androidapps",
+  "AppHookup",
+
+  // 🔥 NEW SOURCES
+  "GameDeals",
+  "Freebies",
+];
+
 
 async function runOnce() {
   console.log("🚀 Scheduler tick: starting Reddit import batch");
