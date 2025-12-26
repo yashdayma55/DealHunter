@@ -1,40 +1,54 @@
-// src/scheduler.ts
+// src/scheduler/scheduler.ts
 import cron from "node-cron";
-import { importRedditDeals } from "../scrapers/reddit/redditToSupabase.js";
-
-
 import "dotenv/config";
+
+import { importRedditDeals } from "../scrapers/reddit/redditToSupabase.js";
+import { importTelegramDeals } from "../scrapers/telegram/telegramToSupabase.js";
 
 const SUBREDDITS = [
   "googleplaydeals",
   "androidapps",
   "AppHookup",
-
-  // 🔥 NEW SOURCES
   "GameDeals",
   "Freebies",
 ];
 
+const TELEGRAM_CHANNELS = [
+  "@PLAYSTOREDEAL",
+  "@iosappdeals",
+];
+
 
 async function runOnce() {
-  console.log("🚀 Scheduler tick: starting Reddit import batch");
+  console.log("🚀 Scheduler tick: starting import batch");
 
+  // 🔹 Reddit sources
   for (const sub of SUBREDDITS) {
     try {
       const count = await importRedditDeals(sub);
-      console.log(`✅ ${sub}: inserted ${count} deals`);
+      console.log(`✅ Reddit ${sub}: inserted ${count} deals`);
     } catch (err) {
-      console.error(`❌ Error importing deals from ${sub}`, err);
+      console.error(`❌ Error importing Reddit ${sub}`, err);
+    }
+  }
+
+  // 🔹 Telegram sources
+  for (const channel of TELEGRAM_CHANNELS) {
+    try {
+      const count = await importTelegramDeals(channel);
+      console.log(`✅ Telegram ${channel}: inserted ${count} deals`);
+    } catch (err) {
+      console.error(`❌ Error importing Telegram ${channel}`, err);
     }
   }
 
   console.log("✅ Scheduler batch finished\n");
 }
 
-// Run immediately at startup
+// ▶ Run once on startup
 runOnce();
 
-// Then every 15 minutes
-cron.schedule("*/15 * * * *", () => {
-  runOnce();
+// ⏰ Run every 15 minutes
+cron.schedule("*/15 * * * *", async () => {
+  await runOnce();
 });
