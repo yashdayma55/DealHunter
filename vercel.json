@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd deals-frontend && npm run build",
+  "outputDirectory": "deals-frontend/.next",
+  "installCommand": "cd deals-frontend && npm install"
+}
