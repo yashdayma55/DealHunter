@@ -1,17 +1,25 @@
 export interface TelegramDeal {
+  /** Main message headline */
   title: string;
+
+  /** Full message text */
   description?: string;
 
-  price_before?: number;
-  price_after?: number;
-  currency?: string;
-
-  discount_type?: string;
-  discount_value?: number;
-
+  /** Extracted URL (if present in message text) */
   url?: string;
-  posted_utc?: string;
-  score?: number;
 
-  metadata?: Record<string, any>;
+  /** Telegram message timestamp (ISO string) */
+  posted_utc?: string;
+
+  /**
+   * Raw Telegram-specific data
+   * Stored in Supabase as jsonb
+   */
+  metadata?: {
+    telegram_msg_id?: number;
+    views?: number | null;
+    forwards?: number | null;
+    channel?: string;
+    [key: string]: any;
+  };
 }

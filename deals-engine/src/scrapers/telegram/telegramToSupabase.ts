@@ -17,28 +17,37 @@ export async function importTelegramDeals(channelName: string) {
   const deals: TelegramDeal[] = await scrapeTelegramChannel(channelName);
 
   const rows = deals.map((d: TelegramDeal) => ({
-    title: d.title,
-    description: d.description ?? null,
+  title: d.title,
+  description: d.description ?? null,
 
-    price_before: d.price_before ?? null,
-    price_after: d.price_after ?? null,
-    currency: d.currency ?? null,
+  // Telegram does NOT have pricing → must be NULL
+  price_before: null,
+  price_after: null,
+  currency: null,
 
-    discount_type: d.discount_type ?? null,
-    discount_value: d.discount_value ?? null,
+  discount_type: null,
+  discount_value: null,
 
-    url: d.url ?? null,
-    posted_utc: d.posted_utc ?? null,
-    score_at_scrape: d.score ?? null,
+  url: d.url ?? null,
 
-    channel_id: channel.id,
-    data_source_id: channel.data_source_id,
+  // REQUIRED by frontend sorting
+  posted_utc: d.posted_utc ?? null,
 
-    package_id: null,
-    referral_code: null,
-    expiry_date: null,
-    metadata: d.metadata ?? {},
-  }));
+  // Telegram has no score → keep 0
+  score_at_scrape: 0,
+
+  channel_id: channel.id,
+  data_source_id: channel.data_source_id,
+
+  // Optional relations
+  package_id: null,
+  referral_code: null,
+  expiry_date: null,
+
+  // Telegram-specific info
+  metadata: d.metadata ?? {},
+}));
+
 
   const { error } = await supabase.from("deals").insert(rows);
 

@@ -36,10 +36,11 @@ export async function scrapeTelegramChannel(
         : undefined,
       url: extractUrlFromReplyMarkup(msg.replyMarkup),
       metadata: {
-        telegram_id: msg.id,
-        views: msg.views,
-        forwards: msg.forwards,
+      telegram_msg_id: msg.id,
+      views: msg.views,
+      forwards: msg.forwards,
       },
+
     });
   }
 
