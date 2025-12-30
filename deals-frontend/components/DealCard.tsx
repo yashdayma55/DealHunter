@@ -3,6 +3,14 @@
 
 import { ExternalLink, Flame, Clock } from "lucide-react";
 import type { Deal } from "@/src/types/deal";
+function getSourceName(deal: Deal): string {
+  return deal.source?.[0]?.name?.toLowerCase() ?? "";
+}
+
+function getChannelName(deal: Deal): string {
+  return deal.channel?.[0]?.channel_name?.toLowerCase() ?? "";
+}
+
 
 type Props = { deal: Deal };
 
@@ -26,12 +34,13 @@ function formatDate(ts: string | Date | null | undefined) {
 }
 
 function getSourceLabel(deal: Deal) {
-  const src = (deal.source?.name ?? "").toLowerCase();
-  const ch = (deal.channel?.channel_name ?? "").toLowerCase();
+  const src = getSourceName(deal);
+  const ch = getChannelName(deal);
 
   if (src.includes("telegram") || ch.startsWith("@")) return "Telegram";
   return "Reddit";
 }
+
 
 export const DealCard: React.FC<Props> = ({ deal }) => {
   const heat = deal.score_at_scrape ?? 0;
@@ -43,7 +52,8 @@ export const DealCard: React.FC<Props> = ({ deal }) => {
   const isSuperHot = heat >= 100;
 
   const sourceLabel = getSourceLabel(deal);
-  const channelName = deal.channel?.channel_name ?? null;
+  const channelName = deal.channel?.[0]?.channel_name ?? null;
+
 
   let discountLabel = "";
   if (isFree) {

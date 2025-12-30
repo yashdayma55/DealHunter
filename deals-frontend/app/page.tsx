@@ -8,6 +8,15 @@ import { DealCard } from "@/components/DealCard";
 import { DealSkeleton } from "@/components/DealSkeleton";
 import { Search, Filter } from "lucide-react";
 
+function getSourceName(d: Deal): string {
+  return d.source?.[0]?.name?.toLowerCase() ?? "";
+}
+
+function getChannelName(d: Deal): string {
+  return d.channel?.[0]?.channel_name?.toLowerCase() ?? "";
+}
+
+
 type SortOption = "newest" | "hottest" | "biggest-discount";
 type QuickFilter = "all" | "hot" | "free" | "expiring";
 type SourceFilter = "all" | "reddit" | "telegram";
@@ -84,11 +93,12 @@ export default function HomePage() {
     const hot = deals.filter((d) => (d.score_at_scrape ?? 0) >= 50).length;
     const free = deals.filter((d) => d.price_after === 0).length;
 
-    const telegram = deals.filter((d) => {
-      const src = (d.source?.name ?? "").toLowerCase();
-      const ch = (d.channel?.channel_name ?? "").toLowerCase();
-      return src.includes("telegram") || ch.startsWith("@");
-    }).length;
+  const telegram = deals.filter((d) => {
+  const src = getSourceName(d);
+  const ch = getChannelName(d);
+  return src.includes("telegram") || ch.startsWith("@");
+}).length;
+
 
     const reddit = total - telegram;
 
@@ -106,10 +116,10 @@ export default function HomePage() {
     // Source filter
     if (sourceFilter !== "all") {
       result = result.filter((d) => {
-        const src = (d.source?.name ?? "").toLowerCase();
-        const ch = (d.channel?.channel_name ?? "").toLowerCase();
+        const src = getSourceName(d);
+        const ch = getChannelName(d);
         const isTelegram = src.includes("telegram") || ch.startsWith("@");
-        return sourceFilter === "telegram" ? isTelegram : !isTelegram;
+
       });
     }
 

@@ -20,11 +20,11 @@ export interface Deal {
   posted_utc: string | null;
   expiry_date: string | null;
 
-  // ✅ helpful for showing Telegram/Reddit source on UI
+  // metadata
   channel_id?: number | null;
   data_source_id?: number | null;
 
-  // Supabase relation objects (we’ll alias them in the query)
-  channel?: { channel_name: string | null } | null;
-  source?: { name: string | null } | null;
+  // ✅ Supabase relations are ARRAYS
+  channel?: { channel_name: string | null }[] | null;
+  source?: { name: string | null }[] | null;
 }
