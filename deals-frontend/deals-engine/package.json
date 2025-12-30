@@ -1,0 +1,27 @@
+{
+  "name": "deals-engine",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "scrape:once": "node dist/scrapers/reddit/testImport.js",
+    "scheduler": "node dist/scheduler/scheduler.js",
+    "backfill:packages": "node dist/scripts/backfillPackages.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.78.0",
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "google-play-scraper": "^10.1.2",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
+    "telegram": "^2.26.22"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
