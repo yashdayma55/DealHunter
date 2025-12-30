@@ -25,15 +25,26 @@ function formatDate(ts: string | Date | null | undefined) {
   return new Date(ts).toLocaleDateString();
 }
 
+function getSourceLabel(deal: Deal) {
+  const src = (deal.source?.name ?? "").toLowerCase();
+  const ch = (deal.channel?.channel_name ?? "").toLowerCase();
+
+  if (src.includes("telegram") || ch.startsWith("@")) return "Telegram";
+  return "Reddit";
+}
+
 export const DealCard: React.FC<Props> = ({ deal }) => {
   const heat = deal.score_at_scrape ?? 0;
   const before = deal.price_before;
   const after = deal.price_after;
+
   const isFree = after === 0;
   const isHot = heat >= 50;
   const isSuperHot = heat >= 100;
 
-  // Build discount label
+  const sourceLabel = getSourceLabel(deal);
+  const channelName = deal.channel?.channel_name ?? null;
+
   let discountLabel = "";
   if (isFree) {
     discountLabel = "🔥 Free — 100% off";
@@ -43,25 +54,35 @@ export const DealCard: React.FC<Props> = ({ deal }) => {
     discountLabel = `Save ${pct}% (${formatPrice(diff, deal.currency)})`;
   }
 
+  const ctaHref = deal.url ?? "#";
+
   return (
     <article className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-zinc-900/90 to-black p-[1px] hover:border-pink-500/60 hover:shadow-[0_0_30px_rgba(236,72,153,0.3)] transition">
-      
-      {/* Glow on hover */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 opacity-0 blur-2xl group-hover:opacity-100" />
 
       <div className="relative flex h-full flex-col rounded-2xl bg-gradient-to-b from-zinc-950 via-zinc-900 to-black p-4">
-
-        {/* Title + heat */}
+        {/* Top row */}
         <div className="mb-3 flex items-start justify-between gap-3">
-          <h2 className="line-clamp-2 text-sm font-semibold text-white">{deal.title}</h2>
+          <h2 className="line-clamp-2 text-sm font-semibold text-white">
+            {deal.title}
+          </h2>
 
-          <div className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] border border-zinc-700 bg-zinc-900 text-zinc-300">
-            <Flame
-              className={`h-3 w-3 ${
-                isSuperHot ? "text-red-400" : isHot ? "text-orange-400" : "text-zinc-500"
-              }`}
-            />
-            <span>{heat}</span>
+          <div className="flex items-center gap-2">
+            {/* Source badge */}
+            <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300">
+              {sourceLabel}
+              {channelName ? ` • ${channelName}` : ""}
+            </span>
+
+            {/* Heat badge */}
+            <div className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] border border-zinc-700 bg-zinc-900 text-zinc-300">
+              <Flame
+                className={`h-3 w-3 ${
+                  isSuperHot ? "text-red-400" : isHot ? "text-orange-400" : "text-zinc-500"
+                }`}
+              />
+              <span>{heat}</span>
+            </div>
           </div>
         </div>
 
@@ -80,7 +101,7 @@ export const DealCard: React.FC<Props> = ({ deal }) => {
               )}
             </>
           ) : (
-            <span className="text-sm text-zinc-400">Dynamic price</span>
+            <span className="text-sm text-zinc-400">Price not provided</span>
           )}
         </div>
 
@@ -105,12 +126,14 @@ export const DealCard: React.FC<Props> = ({ deal }) => {
 
         {/* Description */}
         {deal.description && (
-          <p className="mb-4 line-clamp-2 text-xs text-zinc-400">{deal.description}</p>
+          <p className="mb-4 line-clamp-2 text-xs text-zinc-400">
+            {deal.description}
+          </p>
         )}
 
         {/* CTA */}
         <a
-          href={deal.url ?? "#"}
+          href={ctaHref}
           target="_blank"
           rel="noreferrer"
           className="mt-auto flex items-center justify-center gap-1 rounded-full bg-gradient-to-r from-orange-500 via-pink-500 to-fuchsia-500 px-4 py-2 text-xs font-semibold text-white shadow-md hover:brightness-110"
