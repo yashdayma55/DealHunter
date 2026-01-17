@@ -1,46 +1,61 @@
-import { Api } from "telegram";
-import { TelegramDeal } from "./telegramTypes.js";
-import { getTelegramClient } from "./telegramClient.js";
+import { TelegramClient, Api } from "telegram";
+import { StringSession } from "telegram/sessions/index.js";
 
-function extractUrlFromReplyMarkup(
-  replyMarkup: unknown
-): string | undefined {
-  if (replyMarkup instanceof Api.ReplyInlineMarkup) {
-    const firstRow = replyMarkup.rows?.[0];
-    const firstButton = firstRow?.buttons?.[0];
+import dotenv from "dotenv";
 
-    if ("url" in firstButton) {
-      return firstButton.url;
-    }
-  }
-  return undefined;
-}
+dotenv.config();
 
-export async function scrapeTelegramChannel(
-  channelName: string
-): Promise<TelegramDeal[]> {
-  const client = await getTelegramClient();
-  const entity = await client.getEntity(channelName);
-  const messages = await client.getMessages(entity, { limit: 50 });
+const apiId = Number(process.env.TELEGRAM_API_ID);
+const apiHash = process.env.TELEGRAM_API_HASH!;
+const session = new StringSession(process.env.TELEGRAM_SESSION!);
 
-  const deals: TelegramDeal[] = [];
+const client = new TelegramClient(session, apiId, apiHash, {
+  connectionRetries: 5,
+});
 
-  for (const msg of messages) {
+export async function scrapeTelegramChannel(channel: string) {
+  await client.connect();
+
+  const deals: any[] = [];
+
+  for await (const msg of client.iterMessages(channel, { limit: 50 })) {
     if (!msg.message) continue;
 
-    deals.push({
-      title: msg.message.split("\n")[0].slice(0, 120),
-      description: msg.message,
-      posted_utc: msg.date
-        ? new Date(msg.date * 1000).toISOString()
-        : undefined,
-      url: extractUrlFromReplyMarkup(msg.replyMarkup),
-      metadata: {
-      telegram_msg_id: msg.id,
-      views: msg.views,
-      forwards: msg.forwards,
-      },
+    // 👉 Take first line as title
+    const title = msg.message.split("\n")[0].trim();
 
+    // ❌ Skip non-English titles
+    if (!/[a-zA-Z]/.test(title)) continue;
+
+    let url: string | null = null;
+
+    // 1️⃣ Try extracting URL from text
+    const textMatch = msg.message.match(/https?:\/\/[^\s]+/);
+    if (textMatch) {
+      url = textMatch[0];
+    }
+
+    // 2️⃣ Try extracting hidden Telegram links (Play Store Link)
+    if (!url && msg.entities) {
+      for (const ent of msg.entities) {
+        if (ent instanceof Api.MessageEntityTextUrl) {
+          url = ent.url;
+          break;
+        }
+      }
+    }
+
+    // ❌ Skip deal if no URL found
+    if (!url) continue;
+
+    deals.push({
+      title,
+      description: msg.message,
+      url,
+      posted_utc: new Date(msg.date * 1000).toISOString(),
+      score_at_scrape: msg.views ?? 0,
+      source: "telegram",
+      channel,
     });
   }
 

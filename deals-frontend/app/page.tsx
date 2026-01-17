@@ -1,4 +1,3 @@
-// app/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -6,14 +5,22 @@ import { supabase } from "@/src/lib/supabaseClient";
 import type { Deal } from "@/src/types/deal";
 import { DealCard } from "@/components/DealCard";
 import { DealSkeleton } from "@/components/DealSkeleton";
-import { Search, Filter } from "lucide-react";
+import { Flame, Clock, Gift, Search } from "lucide-react";
 
-function getSourceName(d: Deal): string {
-  return d.source?.[0]?.name?.toLowerCase() ?? "";
-}
+/* =========================================================
+   Helpers
+========================================================= */
+function isTelegramDeal(d: Deal): boolean {
+  const raw = (d as any).source;
 
-function getChannelName(d: Deal): string {
-  return d.channel?.[0]?.channel_name?.toLowerCase() ?? "";
+  if (!raw) return false;
+
+  // Supabase may return object OR array
+  if (Array.isArray(raw)) {
+    return raw[0]?.name === "telegram";
+  }
+
+  return raw.name === "telegram";
 }
 
 
@@ -27,28 +34,21 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [minScore, setMinScore] = useState(0);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
 
-  // ─────────────────────────────────────────────────────────────
-  // Fetch deals from Supabase
-  // ─────────────────────────────────────────────────────────────
+  /* =========================================================
+     Fetch deals
+  ========================================================= */
   useEffect(() => {
     async function loadDeals() {
       setLoading(true);
       setError(null);
 
-      /**
-       * IMPORTANT:
-       * You insert 125 Reddit deals per run (5 subs × 25).
-       * If we limit(120), Telegram deals will never appear.
-       */
       const { data, error } = await supabase
         .from("deals")
-        .select(
-          `
+        .select(`
           id,
           title,
           description,
@@ -62,21 +62,14 @@ export default function HomePage() {
           score_at_scrape,
           posted_utc,
           expiry_date,
-          channel_id,
-          data_source_id,
           channel:channels(channel_name),
           source:data_sources(name)
-        `
-        )
+        `)
         .order("posted_utc", { ascending: false })
-        .limit(400);
+        .limit(1000);
 
-      if (error) {
-        console.error("Error loading deals:", error);
-        setError(error.message ?? "Unknown error");
-      } else if (data) {
-        setDeals(data as Deal[]);
-      }
+      if (error) setError(error.message);
+      else setDeals((data ?? []) as Deal[]);
 
       setLoading(false);
     }
@@ -84,235 +77,164 @@ export default function HomePage() {
     loadDeals();
   }, []);
 
-  // ─────────────────────────────────────────────────────────────
-  // Derived stats
-  // ─────────────────────────────────────────────────────────────
+  /* =========================================================
+     Stats
+  ========================================================= */
   const stats = useMemo(() => {
     const total = deals.length;
-
-    const hot = deals.filter((d) => (d.score_at_scrape ?? 0) >= 50).length;
-    const free = deals.filter((d) => d.price_after === 0).length;
-
-  const telegram = deals.filter((d) => {
-  const src = getSourceName(d);
-  const ch = getChannelName(d);
-  return src.includes("telegram") || ch.startsWith("@");
-}).length;
-
-
+    const telegram = deals.filter(isTelegramDeal).length;
     const reddit = total - telegram;
+    const hot = deals.filter(d => (d.score_at_scrape ?? 0) >= 50).length;
+    const free = deals.filter(d => d.price_after === 0).length;
 
-    const latest = deals[0]?.posted_utc ? new Date(deals[0].posted_utc as any) : null;
-
-    return { total, hot, free, latest, telegram, reddit };
+    return { total, telegram, reddit, hot, free };
   }, [deals]);
 
-  // ─────────────────────────────────────────────────────────────
-  // Filtering & sorting
-  // ─────────────────────────────────────────────────────────────
+  /* =========================================================
+     Filtering & sorting
+  ========================================================= */
   const filteredDeals = useMemo(() => {
     let result = [...deals];
 
-    // Source filter
     if (sourceFilter !== "all") {
-      result = result.filter((d) => {
-        const src = getSourceName(d);
-        const ch = getChannelName(d);
-        const isTelegram = src.includes("telegram") || ch.startsWith("@");
-
-      });
+      result = result.filter(d =>
+        sourceFilter === "telegram"
+          ? isTelegramDeal(d)
+          : !isTelegramDeal(d)
+      );
     }
 
-    // Search by title
     if (search.trim()) {
       const q = search.toLowerCase();
-      result = result.filter((d) => d.title.toLowerCase().includes(q));
+      result = result.filter(d => d.title.toLowerCase().includes(q));
     }
 
-    // Min score
-    if (minScore > 0) {
-      result = result.filter((d) => (d.score_at_scrape ?? 0) >= minScore);
-    }
-
-    // Quick filter chips
     if (quickFilter === "hot") {
-      result = result.filter((d) => (d.score_at_scrape ?? 0) >= 50);
+      result = result.filter(d => (d.score_at_scrape ?? 0) >= 50);
     } else if (quickFilter === "free") {
-      result = result.filter((d) => d.price_after === 0);
+      result = result.filter(d => d.price_after === 0);
     } else if (quickFilter === "expiring") {
-      const now = new Date();
+      const now = Date.now();
       const twoDays = 1000 * 60 * 60 * 24 * 2;
-      result = result.filter((d) => {
+      result = result.filter(d => {
         if (!d.expiry_date) return false;
         const exp = new Date(d.expiry_date as any).getTime();
-        return exp - now.getTime() <= twoDays && exp >= now.getTime();
+        return exp >= now && exp - now <= twoDays;
       });
     }
 
-    // Sorting
     if (sortBy === "hottest") {
       result.sort((a, b) => (b.score_at_scrape ?? 0) - (a.score_at_scrape ?? 0));
     } else if (sortBy === "biggest-discount") {
       result.sort((a, b) => {
-        const getPct = (d: Deal) => {
+        const pct = (d: Deal) => {
           if (!d.price_before || d.price_after == null) return 0;
-          const diff = d.price_before - d.price_after;
-          if (diff <= 0) return 0;
-          return diff / d.price_before;
+          return (d.price_before - d.price_after) / d.price_before;
         };
-        return getPct(b) - getPct(a);
+        return pct(b) - pct(a);
       });
     }
-    // newest is default from DB order
 
     return result;
-  }, [deals, search, minScore, sortBy, quickFilter, sourceFilter]);
+  }, [deals, search, sortBy, quickFilter, sourceFilter]);
 
-  const chipClasses = (active: boolean) =>
-    `rounded-full border px-3 py-1 text-xs transition-colors ${
-      active
-        ? "border-pink-500 bg-pink-500/10 text-pink-200"
-        : "border-zinc-700 bg-zinc-900/60 text-zinc-400 hover:border-pink-500/60 hover:text-pink-200"
-    }`;
-
+  /* =========================================================
+     UI
+  ========================================================= */
   return (
-    <main className="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900 to-black text-zinc-50">
-      <div className="pointer-events-none fixed inset-0 -z-10 opacity-70">
-        <div className="absolute -left-10 top-20 h-64 w-64 rounded-full bg-pink-500/20 blur-3xl" />
-        <div className="absolute right-0 top-40 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
-      </div>
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto max-w-7xl px-4 py-10">
 
-      <div className="mx-auto max-w-6xl px-4 py-8 md:py-12">
-        <header className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-orange-400 via-pink-400 to-yellow-300 bg-clip-text text-transparent">
-              Latest Deals
-            </h1>
-            <p className="mt-3 text-sm text-zinc-400 max-w-xl">
-              Deals pulled from Reddit + Telegram. Use filters and jump straight to the link.
-            </p>
+        {/* HERO */}
+        <header className="mb-10">
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-orange-400 via-pink-500 to-fuchsia-500 bg-clip-text text-transparent">
+            Latest Deals
+          </h1>
+          <p className="mt-3 text-zinc-400">
+            Deals pulled from Reddit & Telegram. Filter smart and jump straight to the link.
+          </p>
 
-            <div className="mt-4 flex flex-wrap gap-2 text-xs">
-              <button onClick={() => setQuickFilter("all")} className={chipClasses(quickFilter === "all")}>
-                All deals ({stats.total})
-              </button>
-              <button onClick={() => setQuickFilter("hot")} className={chipClasses(quickFilter === "hot")}>
-                🔥 Hot (50+)
-              </button>
-              <button onClick={() => setQuickFilter("free")} className={chipClasses(quickFilter === "free")}>
-                🆓 Free / 0$
-              </button>
-              <button onClick={() => setQuickFilter("expiring")} className={chipClasses(quickFilter === "expiring")}>
-                ⏰ Expiring soon
-              </button>
-            </div>
-
-            <div className="mt-3 text-xs text-zinc-500">
-              Sources: Reddit {stats.reddit} • Telegram {stats.telegram}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end gap-3 text-xs">
-            <span className="inline-flex items-center rounded-full bg-zinc-900/80 px-3 py-1 text-zinc-400 border border-zinc-700/80">
-              <span className="mr-1 h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-              Live data from Supabase
+          {/* Stats pills */}
+          <div className="mt-4 flex flex-wrap gap-3 text-xs">
+            <span className="rounded-full bg-zinc-900 px-3 py-1 border border-zinc-700">
+              All deals ({stats.total})
             </span>
-
-            {stats.latest && (
-              <span className="text-zinc-500">
-                Last update:{" "}
-                {stats.latest.toLocaleString(undefined, {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            )}
+            <span className="rounded-full bg-zinc-900 px-3 py-1 border border-orange-500/40 text-orange-300">
+              🔥 Hot ({stats.hot})
+            </span>
+            <span className="rounded-full bg-zinc-900 px-3 py-1 border border-green-500/40 text-green-300">
+              🎁 Free ({stats.free})
+            </span>
+            <span className="rounded-full bg-zinc-900 px-3 py-1 border border-zinc-700">
+              Reddit {stats.reddit} • Telegram {stats.telegram}
+            </span>
           </div>
         </header>
 
-        <section className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        {/* FILTER BAR */}
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+
+          {/* Search */}
           <div className="relative w-full md:max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
             <input
-              type="text"
-              placeholder="Search deals (e.g. VPN, photo editor, game)…"
+              className="w-full rounded-full bg-zinc-900 border border-zinc-700 pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-pink-500"
+              placeholder="Search deals (apps, games, tools...)"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-full border border-zinc-700 bg-zinc-900/80 pl-9 pr-4 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              onChange={e => setSearch(e.target.value)}
             />
           </div>
 
-          <div className="flex flex-wrap gap-3 text-xs z-50 relative">
-            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/80 px-3 py-1">
-              <Filter className="h-3 w-3 text-zinc-500" />
-              <span className="text-zinc-400">Min heat</span>
-              <select
-                value={minScore}
-                onChange={(e) => setMinScore(Number(e.target.value))}
-                className="bg-zinc-800 text-zinc-100 rounded px-2 py-1 outline-none"
-              >
-                <option value={0}>Any</option>
-                <option value={25}>25+</option>
-                <option value={50}>50+</option>
-                <option value={100}>100+</option>
-              </select>
-            </div>
+          {/* Controls */}
+          <div className="flex flex-wrap gap-3">
+            <select
+              value={quickFilter}
+              onChange={e => setQuickFilter(e.target.value as QuickFilter)}
+              className="rounded-full bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm"
+            >
+              <option value="all">All</option>
+              <option value="hot">🔥 Hot</option>
+              <option value="free">🎁 Free</option>
+              <option value="expiring">⏳ Expiring</option>
+            </select>
 
-            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/80 px-3 py-1">
-              <span className="text-zinc-400">Sort by</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="bg-zinc-800 text-zinc-100 rounded px-2 py-1 outline-none"
-              >
-                <option value="newest">Newest</option>
-                <option value="hottest">Hottest</option>
-                <option value="biggest-discount">Biggest discount</option>
-              </select>
-            </div>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as SortOption)}
+              className="rounded-full bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm"
+            >
+              <option value="newest">Newest</option>
+              <option value="hottest">Hottest</option>
+              <option value="biggest-discount">Biggest discount</option>
+            </select>
 
-            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/80 px-3 py-1">
-              <span className="text-zinc-400">Source</span>
-              <select
-                value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
-                className="bg-zinc-800 text-zinc-100 rounded px-2 py-1 outline-none"
-              >
-                <option value="all">All</option>
-                <option value="reddit">Reddit</option>
-                <option value="telegram">Telegram</option>
-              </select>
-            </div>
+            <select
+              value={sourceFilter}
+              onChange={e => setSourceFilter(e.target.value as SourceFilter)}
+              className="rounded-full bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm"
+            >
+              <option value="all">All sources</option>
+              <option value="reddit">Reddit</option>
+              <option value="telegram">Telegram</option>
+            </select>
           </div>
-        </section>
+        </div>
 
+        {/* CONTENT */}
         {loading ? (
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 9 }).map((_, i) => (
               <DealSkeleton key={i} />
             ))}
-          </section>
+          </div>
         ) : error ? (
-          <div className="mt-10 rounded-2xl border border-red-500/40 bg-red-500/5 p-6 text-sm text-red-200">
-            <p className="font-semibold mb-1">Failed to load deals</p>
-            <p className="text-red-300">{error}</p>
-          </div>
-        ) : filteredDeals.length === 0 ? (
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-900/70 px-6 py-10 text-center text-sm text-zinc-300">
-            <p className="text-lg font-semibold">No deals match your filters 🔍</p>
-            <p className="text-zinc-400 max-w-md">
-              Clear search / lower heat / switch source to <span className="font-medium text-pink-300">All</span>.
-            </p>
-          </div>
+          <div className="text-red-400">{error}</div>
         ) : (
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredDeals.map((deal) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredDeals.map(deal => (
               <DealCard key={deal.id} deal={deal} />
             ))}
-          </section>
+          </div>
         )}
       </div>
     </main>

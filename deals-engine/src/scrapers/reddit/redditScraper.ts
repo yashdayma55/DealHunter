@@ -1,21 +1,27 @@
 import { fetchRedditPosts } from "./redditClient.js";
 import { RedditPost } from "./redditTypes.js";
+import { mapRedditToDeal } from "./redditMapper.js";
 
-export async function scrapeRedditDeals(
-  subreddit: string
-): Promise<RedditPost[]> {
+/**
+ * Scrape Reddit deals from a subreddit
+ * ✅ Filters out non-deal posts
+ * ✅ Returns only valid deal objects
+ */
+export async function scrapeRedditDeals(subreddit: string) {
   console.log(`🔎 Fetching posts from r/${subreddit}`);
 
-  const posts: any[] = await fetchRedditPosts(subreddit, 25);
+  const posts: RedditPost[] = await fetchRedditPosts(subreddit, 25);
 
-  return posts.map((p: any) => ({
-    id: p.id,
-    title: p.title,
-    author: p.author,
-    permalink: `https://reddit.com${p.permalink}`,
-    url: p.url,
-    created_utc: p.created_utc,
-    ups: p.ups,
-    num_comments: p.num_comments,
-  }));
+  const deals = [];
+
+  for (const post of posts) {
+    const deal = mapRedditToDeal(post);
+
+    // 🚫 Skip non-deal posts (questions, discussions, etc.)
+    if (!deal) continue;
+
+    deals.push(deal);
+  }
+
+  return deals;
 }

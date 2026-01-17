@@ -8,5 +8,5 @@ export interface RedditPost {
   ups: number;
   num_comments: number;
   selftext?: string;
-
+  link_flair_text?: string; // <--- ADD THIS
 }

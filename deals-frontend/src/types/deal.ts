@@ -1,4 +1,3 @@
-// src/types/deal.ts
 export interface Deal {
   id: number;
 
@@ -20,11 +19,9 @@ export interface Deal {
   posted_utc: string | null;
   expiry_date: string | null;
 
-  // metadata
-  channel_id?: number | null;
-  data_source_id?: number | null;
-
-  // ✅ Supabase relations are ARRAYS
   channel?: { channel_name: string | null }[] | null;
   source?: { name: string | null }[] | null;
+
+  // 🔥 NEW
+  package?: { name: string | null }[] | null;
 }

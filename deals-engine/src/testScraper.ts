@@ -1,21 +1,22 @@
-import { scrapeRedditDeals } from "./scrapers/reddit/redditScraper.js";
-
-
+// src/testScraper.ts
+import { scrapeRedditDeals } from "./scrapers/reddit/redditScraper.js"; 
 
 async function testReddit() {
   try {
     console.log("🚀 Testing Reddit scraper...\n");
 
     const subreddit = "googleplaydeals";
-    const posts = await scrapeRedditDeals(subreddit);
+    const deals = await scrapeRedditDeals(subreddit);
 
-    console.log(`✅ Fetched ${posts.length} posts from r/${subreddit}\n`);
+    console.log(`✅ Fetched ${deals.length} deals from r/${subreddit}\n`);
 
-    posts.slice(0, 5).forEach((post, i) => {
-      console.log(`--- Post ${i + 1} ---`);
-      console.log("Title:", post.title);
-      console.log("Ups:", post.ups);
-      console.log("URL:", post.permalink);
+    // Added ': any' and ': number' to fix the implicit type errors
+    deals.slice(0, 5).forEach((deal: any, i: number) => {
+      console.log(`--- Deal ${i + 1} ---`);
+      console.log("Title:", deal.title);
+      console.log("Score:", deal.score_at_scrape); 
+      console.log("URL:", deal.url);
+      console.log("Price:", deal.price_after);
       console.log("");
     });
 

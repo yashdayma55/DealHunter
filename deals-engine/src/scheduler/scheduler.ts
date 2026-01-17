@@ -10,39 +10,52 @@ const SUBREDDITS = [
   "androidapps",
   "AppHookup",
   "GameDeals",
-  "Freebies",
+  "iosapps",
 ];
 
 const TELEGRAM_CHANNELS = [
   "@PLAYSTOREDEAL",
   "@iosappdeals",
+  "@freegames",
+  "@FreeGamesNews",
 ];
 
-
 async function runOnce() {
-  console.log("🚀 Scheduler tick: starting import batch");
+  console.log("\n🚀 Scheduler tick: Starting batch import...");
 
-  // 🔹 Reddit sources
+  // ---------------------------------------------
+  // 1. REDDIT SCRAPER
+  // ---------------------------------------------
+  console.log("🔹 [1/2] Starting Reddit Import...");
   for (const sub of SUBREDDITS) {
     try {
       const count = await importRedditDeals(sub);
-      console.log(`✅ Reddit ${sub}: inserted ${count} deals`);
-    } catch (err) {
-      console.error(`❌ Error importing Reddit ${sub}`, err);
+      console.log(`   ✅ r/${sub}: ${count} deals inserted`);
+    } catch (err: any) {
+      // Fixed the typo here: || instead of ||ux
+      console.error(`   ❌ r/${sub} Failed:`, err.message || err);
     }
   }
 
-  // 🔹 Telegram sources
+  // ---------------------------------------------
+  // 2. TELEGRAM SCRAPER
+  // ---------------------------------------------
+  console.log("🔹 [2/2] Starting Telegram Import...");
+  
+  if (!process.env.TELEGRAM_SESSION) {
+    console.warn("   ⚠️ WARNING: TELEGRAM_SESSION is missing in .env. Telegram scraper may hang or fail.");
+  }
+
   for (const channel of TELEGRAM_CHANNELS) {
     try {
       const count = await importTelegramDeals(channel);
-      console.log(`✅ Telegram ${channel}: inserted ${count} deals`);
-    } catch (err) {
-      console.error(`❌ Error importing Telegram ${channel}`, err);
+      console.log(`   ✅ ${channel}: ${count} deals inserted`);
+    } catch (err: any) {
+      console.error(`   ❌ ${channel} Failed:`, err.message || err);
     }
   }
 
-  console.log("✅ Scheduler batch finished\n");
+  console.log("🎉 Scheduler batch finished.\n");
 }
 
 // ▶ Run once on startup

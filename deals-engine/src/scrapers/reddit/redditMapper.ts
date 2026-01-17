@@ -1,64 +1,71 @@
+// src/scrapers/reddit/redditMapper.ts
 import { RedditPost } from "./redditTypes.js";
+import { isValidDeal } from "../../utils/isValidDeal.js";
+import { extractDealInfo } from "../../utils/extractDealInfo.js";
 
-/**
- * Extract Android package ID from URLs such as:
- * https://play.google.com/store/apps/details?id=com.example.app
- */
 function extractAndroidPackage(url: string): string | null {
   if (!url) return null;
   const match = url.match(/id=([a-zA-Z0-9._]+)/);
   return match ? match[1] : null;
 }
 
-/**
- * Extract iOS App Store ID from URLs such as:
- * https://apps.apple.com/us/app/app-name/id123456789
- */
 function extractIosPackage(url: string): string | null {
   if (!url) return null;
   const match = url.match(/\/id(\d+)/);
   return match ? `ios-${match[1]}` : null;
 }
 
-/**
- * Main mapping function: Reddit → Deal + Package UID
- */
+// ✅ NEW: Helper to find links inside text body
+function extractUrlFromText(text?: string): string | null {
+  if (!text) return null;
+  // Looks for http/https links, stops at space, bracket ] or parenthesis )
+  const match = text.match(/(https?:\/\/[^\s\]\)]+)/);
+  return match ? match[1] : null;
+}
+
 export function mapRedditToDeal(post: RedditPost) {
-  const url = post.url;
-
-  // Try extracting Android package
-  let package_uid = extractAndroidPackage(url);
-
-  // Try extracting IOS package
-  if (!package_uid) {
-    package_uid = extractIosPackage(url);
+  // 1. Filter out trash
+  if (!isValidDeal(post.title, post.selftext)) {
+    return null;
   }
 
-  // If still nothing, try using the POST TEXT (selftext)
-  if (!package_uid && post.selftext) {
-    package_uid = extractAndroidPackage(post.selftext) || extractIosPackage(post.selftext);
+  const dealInfo = extractDealInfo(post.title);
+  
+  // 2. SMART URL EXTRACTION
+  let url = post.url;
+  
+  // If the "url" is missing, or it is a link to Reddit itself, check the body text
+  const isSelfPost = !url || url.includes("reddit.com") || url.startsWith("/r/");
+  
+  if (isSelfPost && post.selftext) {
+     const bodyUrl = extractUrlFromText(post.selftext);
+     if (bodyUrl) {
+         url = bodyUrl;
+     }
   }
+
+  // 3. Extract Package ID
+  let package_uid =
+    extractAndroidPackage(url) ||
+    extractIosPackage(url) ||
+    (post.selftext
+      ? extractAndroidPackage(post.selftext) ||
+        extractIosPackage(post.selftext)
+      : null);
 
   return {
-    title: post.title,
-    description: null,
-
-    price_before: null,
-    price_after: null,
-    currency: null,
-
-    discount_type: null,
-    discount_value: null,
-
-    url,
+    title: dealInfo.appName,
+    description: post.selftext || null,
+    price_before: dealInfo.priceBefore,
+    price_after: dealInfo.priceAfter,
+    currency: dealInfo.currency,
+    discount_type: dealInfo.discountType,
+    discount_value: dealInfo.discountValue,
+    url: url, 
     referral_code: null,
-
-    score_at_scrape: post.ups,
+    score_at_scrape: post.ups ?? 0,
     posted_utc: new Date(post.created_utc * 1000).toISOString(),
-
     expiry_date: null,
-
-    // 🔥 NEW FIELD: return package_uid so your main scraper can use it
     package_uid,
   };
 }
