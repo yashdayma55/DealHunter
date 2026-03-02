@@ -1,57 +1,51 @@
-# ER Diagram (Text)
-
-Text-only entity-relationship diagram for the DealHunter Supabase schema.
+# DealHunter ER Diagram (Text)
 
 ```
-data_sources (1) ───< (many) channels
-      │                        │
-      │                        └──< fetch_logs
-      │
-      └──< deals >─── deal_votes
-      │       │            deal_comments
-      │       │
-      │       └── channel_id ──> channels
-      │       └── data_source_id ──> data_sources
-      │       └── package_id ──> platforms
-      │
-platforms ──> category_id ──> categories
+data_sources
+│
+├──< channels
+│ │
+│ ├──< deals
+│ │ ├──< deal_votes
+│ │ └──< deal_comments
+│ │
+│ └──< fetch_logs
+│
+└──< deals
 
-users (optional; for future auth / votes / comments)
+platforms
+│
+└──< deals
+
+categories
+│
+└──< platforms
 ```
 
 ---
 
-## Entity Notes
+## Entity Summary
 
 ### data_sources
-- Origin system (reddit, telegram).
-- Has `is_active` flag.
+Origin systems (Reddit, Telegram).
 
 ### channels
-- Subreddits or Telegram channels.
-- Belongs to `data_sources`.
-- Has `display_name`, `benchmark_score`.
+Subreddits or Telegram channels. Belong to `data_sources`.
 
 ### deals
-- Core dataset read by the frontend.
-- References `channels`, `data_sources`, and `platforms` (via `package_id`).
-- Has `metadata` (JSONB) for extensibility.
+Core dataset powering the frontend. References `channels`, `data_sources`, and `platforms`.
 
 ### platforms
-- App platforms with store metadata (store_url, icon_url, rating, installs).
-- Belongs to `categories`.
+App/store metadata enriched from Play Store or other sources.
 
 ### categories
-- Genres (e.g. Games, Apps).
+Logical grouping for platforms.
 
 ### deal_votes
-- User votes on deals (upvote/downvote).
-- References `deals`.
+User upvote/downvote records.
 
 ### deal_comments
-- User comments on deals.
-- References `deals`.
+User-generated comments.
 
 ### fetch_logs
-- Logs scraper runs per channel.
-- References `channels`.
+Scraper execution logs for observability.
