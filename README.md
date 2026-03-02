@@ -171,33 +171,47 @@ Supabase client:
 
 ---
 
-## Data model (inferred from code)
+## Supabase schema
 
-Tables referenced by the backend:
-- `deals`
-- `data_sources`
-- `channels`
-- `packages`
-- `platforms`
-- `categories`
+The database schema used by DealHunter. The backend writes to these tables; the frontend reads from them.
 
-Key relationships (logical):
-- `deals.data_source_id` -> `data_sources.id`
-- `deals.channel_id` -> `channels.id`
-- `deals.package_id` -> `packages.id`
-- `packages.platform_id` -> `platforms.id`
-- `packages.category_id` -> `categories.id`
+### Tables and columns
 
-Important fields in `deals`:
-- `title`, `description`
-- `price_before`, `price_after`, `currency`
-- `discount_type`, `discount_value`
-- `url`, `referral_code`
-- `score_at_scrape`
-- `posted_utc`, `expiry_date`
+| Table | Columns | Description |
+|-------|---------|-------------|
+| **`users`** | `email`, `role`, `created_at` | User accounts and roles |
+| **`data_sources`** | `id`, `name`, `base_url`, `is_active` | Origin systems (e.g. Reddit, Telegram) |
+| **`channels`** | `id`, `data_source_id`, `channel_name`, `display_name`, `description`, `benchmark_score` | Subreddits or Telegram channels |
+| **`categories`** | `id`, `name` | Categories/genres (e.g. Games, Apps) |
+| **`platforms`** | `id`, `name`, `description`, `rating`, `category_id`, `platform_id`, `store_url`, `scraped_json`, `created_at`, `updated_at`, `icon_url`, `installs` | App platforms and metadata |
+| **`deals`** | `id`, `title`, `description`, `price_before`, `price_after`, `currency`, `discount_type`, `discount_value`, `url`, `referral_code`, `score_at_scrape`, `posted_utc`, `expiry_date`, `created_at`, `updated_at`, `channel_id`, `data_source_id`, `package_id`, `metadata` | Core deal records |
+| **`deal_votes`** | `id`, `deal_id`, `vote_type`, `created_at` | User votes on deals |
+| **`deal_comments`** | `id`, `deal_id`, `comment_text`, `created_at` | User comments on deals |
+| **`fetch_logs`** | `id`, `channel_id`, `run_started_at`, `run_finished_at`, `status` | Logs for scraper runs |
 
-Note: The exact schema lives in Supabase, but these are the fields
-required by the code paths in this repo.
+### Relationships
+
+```
+data_sources (1) ───< (many) channels
+      │                        │
+      │                        └──< fetch_logs
+      │
+      └──< deals >─── deal_votes
+      │       │            deal_comments
+      │       │
+      │       └── channel_id ──> channels
+      │       └── data_source_id ──> data_sources
+      │       └── package_id ──> platforms
+      │
+platforms ──> category_id ──> categories
+```
+
+### Key fields (deals)
+
+- **Pricing**: `price_before`, `price_after`, `currency`, `discount_type`, `discount_value`
+- **Content**: `title`, `description`, `url`, `referral_code`
+- **Metadata**: `score_at_scrape`, `posted_utc`, `expiry_date`, `metadata` (JSONB)
+- **Foreign keys**: `channel_id`, `data_source_id`, `package_id`
 
 ---
 
